@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图片批量重命名工具</title>
+<style>
+  :root {
+    --mint: #A8E6CF; --mint-dark: #5BAD8F; --sakura: #FFB7C5;
+    --cream: #FFF9F0; --text: #2C5F4A; --text-light: #6B9E8A;
+    --border: #D8EFE5; --success: #4CAF50; --warn: #FF9800; --danger: #F44336;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'PingFang SC', sans-serif; background: var(--cream); color: var(--text); min-height: 100vh; padding: 30px 20px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 1.8em; background: linear-gradient(135deg, var(--mint-dark), var(--sakura)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 6px; }
+  .subtitle { text-align: center; color: var(--text-light); margin-bottom: 30px; font-size: 0.95em; }
+
+  .card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(168,230,207,0.15); }
+  .card h2 { font-size: 1.1em; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+  .upload-zone { border: 2px dashed var(--mint); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--cream); }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--sakura); background: #FFF5F8; }
+  .upload-zone p { color: var(--text-light); margin-top: 8px; font-size: 0.9em; }
+  .upload-icon { font-size: 2.5em; }
+
+  .file-input { display: none; }
+
+  .config-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .config-row label { font-weight: 600; min-width: 120px; }
+  input[type="number"] { width: 80px; padding: 8px 12px; border: 2px solid var(--border); border-radius: 8px; font-size: 1em; color: var(--text); outline: none; }
+  input[type="number"]:focus { border-color: var(--mint); }
+  .hint { color: var(--text-light); font-size: 0.85em; }
+
+  .btn { padding: 12px 28px; border: none; border-radius: 10px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn-primary { background: linear-gradient(135deg, var(--mint), var(--mint-dark)); color: white; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(91,173,143,0.35); }
+  .btn-secondary { background: var(--sakura); color: white; }
+  .btn-secondary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255,183,197,0.4); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+  .status-bar { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat { background: var(--cream); border-radius: 10px; padding: 10px 18px; text-align: center; }
+  .stat-val { font-size: 1.5em; font-weight: 700; color: var(--text); }
+  .stat-label { font-size: 0.8em; color: var(--text-light); margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+  th { background: var(--mint); color: var(--text); padding: 10px 14px; text-align: left; }
+  th:first-child { border-radius: 8px 0 0 0; }
+  th:last-child { border-radius: 0 8px 0 0; }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: #F5FBF8; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 0.82em; font-weight: 600; }
+  .badge-ok { background: #E8F5E9; color: var(--success); }
+  .badge-warn { background: #FFF3E0; color: var(--warn); }
+  .badge-err { background: #FFEBEE; color: var(--danger); }
+
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  .empty { text-align: center; padding: 40px; color: var(--text-light); }
+  .empty-icon { font-size: 3em; margin-bottom: 12px; }
+
+  .log { background: #1e1e1e; color: #a8e6cf; border-radius: 10px; padding: 16px; font-family: monospace; font-size: 0.88em; max-height: 200px; overflow-y: auto; margin-top: 16px; display: none; }
+  .log.active { display: block; }
+  .log-line { margin-bottom: 4px; }
+  .log-ok { color: #69f0ae; }
+  .log-err { color: #ff5252; }
+  .log-info { color: #82b1ff; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🌿 图片批量重命名工具</h1>
+  <p class="subtitle">上传 Excel + 图片文件夹，一键按商品名称批量重命名</p>
+
+  <!-- Step 1: Excel -->
+  <div class="card">
+    <h2>📊 第一步：上传 Excel 文件</h2>
+    <div class="upload-zone" id="excelZone" onclick="document.getElementById('excelInput').click()">
+      <div class="upload-icon">📋</div>
+      <strong id="excelLabel">点击选择 Excel 文件（.xlsx）</strong>
+      <p>Excel 第1列为商品名称，从第2行开始</p>
+    </div>
+    <input type="file" id="excelInput" class="file-input" accept=".xlsx,.xls">
+
+    <div class="config-row" style="margin-top:16px;">
+      <label>名称所在列：</label>
+      <input type="number" id="nameCol" value="1" min="1" max="50">
+      <span class="hint">（第几列，默认第1列）</span>
+    </div>
+    <div class="config-row">
+      <label>从第几行开始：</label>
+      <input type="number" id="startRow" value="2" min="1" max="100">
+      <span class="hint">（跳过表头，默认第2行）</span>
+    </div>
+  </div>
+
+  <!-- Step 2: Images -->
+  <div class="card">
+    <h2>🖼️ 第二步：上传图片文件</h2>
+    <div class="upload-zone" id="imgZone" onclick="document.getElementById('imgInput').click()">
+      <div class="upload-icon">📁</div>
+      <strong id="imgLabel">点击选择图片（可多选，支持 JPG/PNG/WebP）</strong>
+      <p>图片按文件名排序后，依次对应 Excel 里的名称</p>
+    </div>
+    <input type="file" id="imgInput" class="file-input" accept="image/*" multiple>
+  </div>
+
+  <!-- Step 3: Preview & Execute -->
+  <div class="card" id="previewCard" style="display:none;">
+    <h2>✅ 第三步：预览 & 执行</h2>
+
+    <div class="status-bar">
+      <div class="stat"><div class="stat-val" id="statNames">0</div><div class="stat-label">Excel 名称数</div></div>
+      <div class="stat"><div class="stat-val" id="statImages">0</div><div class="stat-label">图片数量</div></div>
+      <div class="stat"><div class="stat-val" id="statMatch">0</div><div class="stat-label">可匹配数</div></div>
+    </div>
+
+    <div class="config-row" style="margin: 16px 0; padding: 14px; background: var(--cream); border-radius: 10px;">
+      <label>📌 文案前缀：</label>
+      <input type="text" id="prefixInput" placeholder="例如：列表图-" style="flex:1; padding:10px 14px; border:2px solid var(--border); border-radius:8px; font-size:1em; color:var(--text); outline:none;" oninput="refreshPreview()">
+      <span class="hint" style="color:var(--text-light);">（可选，如：列表图-、封面-、详情-）</span>
+    </div>
+
+    <table id="previewTable">
+      <thead><tr><th>#</th><th>原文件名</th><th>新文件名</th><th>状态</th></tr></thead>
+      <tbody id="previewBody"></tbody>
+    </table>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="downloadBtn" onclick="downloadAll()">📥 下载全部（>3张自动打包ZIP）</button>
+      <button class="btn btn-secondary" onclick="refreshPreview()">🔄 刷新预览</button>
+    </div>
+
+    <div class="log" id="logBox"></div>
+  </div>
+</div>
+
+<script>
+let excelNames = [];
+let imageFiles = [];
+
+// Excel 上传
+document.getElementById('excelInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('excelLabel').textContent = '✓ ' + file.name;
+  await parseExcel(file);
+  tryShowPreview();
+});
+
+// 图片上传
+document.getElementById('imgInput').addEventListener('change', (e) => {
+  imageFiles = Array.from(e.target.files).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  document.getElementById('imgLabel').textContent = `✓ 已选择 ${imageFiles.length} 张图片`;
+  tryShowPreview();
+});
+
+// 拖拽支持
+['excelZone', 'imgZone'].forEach(id => {
+  const zone = document.getElementById(id);
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (id === 'excelZone' && files[0]) {
+      document.getElementById('excelInput').files = files;
+      document.getElementById('excelInput').dispatchEvent(new Event('change'));
+    } else if (id === 'imgZone') {
+      // 创建 DataTransfer 赋值
+      const dt = new DataTransfer();
+      Array.from(files).forEach(f => dt.items.add(f));
+      document.getElementById('imgInput').files = dt.files;
+      document.getElementById('imgInput').dispatchEvent(new Event('change'));
+    }
+  });
+});
+
+// 解析 Excel（用 SheetJS）
+async function parseExcel(file) {
+  // 动态加载 SheetJS
+  if (!window.XLSX) {
+    await loadScript('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
+  }
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+  const nameCol = parseInt(document.getElementById('nameCol').value) - 1;
+  const startRow = parseInt(document.getElementById('startRow').value) - 1;
+
+  excelNames = [];
+  for (let i = startRow; i < data.length; i++) {
+    const name = data[i][nameCol];
+    if (name !== undefined && name !== null && String(name).trim() !== '') {
+      excelNames.push(String(name).trim());
+    }
+  }
+  log(`📊 读取 Excel 成功，共 ${excelNames.length} 个名称`, 'info');
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function tryShowPreview() {
+  if (excelNames.length === 0 || imageFiles.length === 0) return;
+  document.getElementById('previewCard').style.display = 'block';
+  refreshPreview();
+}
+
+function refreshPreview() {
+  const nameCol = parseInt(document.getElementById('nameCol').value) - 1;
+  const matchCount = Math.min(excelNames.length, imageFiles.length);
+
+  document.getElementById('statNames').textContent = excelNames.length;
+  document.getElementById('statImages').textContent = imageFiles.length;
+  document.getElementById('statMatch').textContent = matchCount;
+
+  const tbody = document.getElementById('previewBody');
+  tbody.innerHTML = '';
+
+  for (let i = 0; i < Math.max(excelNames.length, imageFiles.length); i++) {
+    const imgFile = imageFiles[i];
+    const prefix = document.getElementById('prefixInput').value.trim();
+    const baseName = excelNames[i] || '';
+    const newName = prefix ? prefix + baseName : baseName;
+    const ext = imgFile ? '.' + imgFile.name.split('.').pop() : '';
+
+    let status, badge;
+    if (imgFile && newName) {
+      status = '✓ 匹配'; badge = 'badge-ok';
+    } else if (imgFile && !newName) {
+      status = '⚠ 无名称'; badge = 'badge-warn';
+    } else {
+      status = '✗ 无图片'; badge = 'badge-err';
+    }
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${imgFile ? imgFile.name : '—'}</td>
+      <td>${newName ? newName + ext : '—'}</td>
+      <td><span class="badge ${badge}">${status}</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// 下载全部（>3张自动打包ZIP）
+async function downloadAll() {
+  const btn = document.getElementById('downloadBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 处理中...';
+  clearLog();
+
+  const matchCount = Math.min(excelNames.length, imageFiles.length);
+  
+  if (matchCount === 0) {
+    log('⚠ 没有可下载的图片', 'err');
+    btn.disabled = false;
+    btn.textContent = '📥 下载全部重命名图片';
+    return;
+  }
+
+  // 超过3张，打包成ZIP
+  if (matchCount > 3) {
+    await downloadAsZip();
+  } else {
+    // 3张及以下，单独下载
+    for (let i = 0; i < matchCount; i++) {
+      const file = imageFiles[i];
+      const prefix = document.getElementById('prefixInput').value.trim();
+      const baseName = excelNames[i] || '';
+      const newName = prefix ? prefix + baseName : baseName;
+      const ext = '.' + file.name.split('.').pop();
+      const finalName = newName + ext;
+
+      try {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = finalName;
+        a.click();
+        URL.revokeObjectURL(url);
+        log(`✓ ${i+1}. ${file.name} → ${finalName}`, 'ok');
+        await sleep(150);
+      } catch (e) {
+        log(`✗ ${i+1}. 失败: ${e.message}`, 'err');
+      }
+    }
+  }
+
+  log(`\n✅ 完成！共 ${matchCount} 张图片`, 'info');
+  btn.disabled = false;
+  btn.textContent = '📥 下载全部重命名图片';
+}
+
+// 打包成ZIP下载
+async function downloadAsZip() {
+  const count = Math.min(excelNames.length, imageFiles.length);
+  log(`正在打包 ${count} 张图片为 ZIP...`, 'info');
+  
+  // 加载 JSZip
+  if (!window.JSZip) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  }
+  
+  const zip = new JSZip();
+  const folder = zip.folder("renamed_images");
+  
+  for (let i = 0; i < count; i++) {
+    const file = imageFiles[i];
+    const prefix = document.getElementById('prefixInput').value.trim();
+    const baseName = excelNames[i] || '';
+    const newName = prefix ? prefix + baseName : baseName;
+    const ext = '.' + file.name.split('.').pop();
+    const finalName = newName + ext;
+    
+    folder.file(finalName, file);
+    log(`✓ ${i+1}. ${file.name} → ${finalName}`, 'ok');
+  }
+  
+  log('正在生成 ZIP 文件...', 'info');
+  const content = await zip.generateAsync({ type: "blob" }, (metadata) => {
+    log(`打包进度: ${metadata.percent.toFixed(0)}%`, 'info');
+  });
+  
+  const url = URL.createObjectURL(content);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `renamed_images_${new Date().getTime()}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+  
+  log('✅ ZIP 打包完成！', 'ok');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function log(msg, type = 'ok') {
+  const box = document.getElementById('logBox');
+  box.classList.add('active');
+  const line = document.createElement('div');
+  line.className = `log-line log-${type}`;
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLog() {
+  const box = document.getElementById('logBox');
+  box.innerHTML = '';
+}
+</script>
+</body>
+</html>
